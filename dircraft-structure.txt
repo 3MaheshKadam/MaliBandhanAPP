@@ -1,0 +1,56 @@
+app/
+  (admin)/
+    dashboard.jsx
+    user-management.jsx
+    verification.jsx
+    _layout.jsx
+  (auth)/
+    login.jsx
+    register.jsx
+  (dashboard)/
+    (tabs)/
+      interests.jsx
+      matches.jsx
+      profile.jsx
+      settings.jsx
+      _layout.jsx
+    interests/
+      index.jsx
+    settings/
+      index.jsx
+    subscription/
+      index.jsx
+    _layout.jsx
+  (splash)/
+    index.jsx
+  +html.tsx
+  +not-found.tsx
+  global.css
+  index.jsx
+  payment-failure.jsx
+  payment-success.jsx
+  _layout.tsx
+app.json
+assets/
+  fonts/
+    SpaceMono-Regular.ttf
+  images/
+    adaptive-icon.png
+    favicon.png
+    icon.png
+    logo.png.png
+    splash-icon.png
+babel.config.js
+constants/
+  Colors.ts
+context/
+  SessionContext.js
+eas.json
+expo-env.d.ts
+filestructure.txt
+metro.config.js
+nativewind-env.d.ts
+package-lock.json
+package.json
+tailwind.config.js
+tsconfig.json
