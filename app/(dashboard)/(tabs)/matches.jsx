@@ -8,12 +8,12 @@ import {
     Image,
     ScrollView,
     TextInput,
-    Modal,
-    ActivityIndicator,
-    Pressable,
     Dimensions,
     Animated,
     StyleSheet,
+    Pressable,
+    Modal,
+    ActivityIndicator,
 } from 'react-native';
 import {
     Heart,
@@ -66,6 +66,8 @@ const isSameCity = (city1, city2) => {
     return city1.toLowerCase() === city2.toLowerCase();
 };
 
+import FeedbackModal from '@/components/FeedbackModal';
+
 const MatchesPage = () => {
     const { user } = useSession();
     const [isLoaded, setIsLoaded] = useState(false);
@@ -80,6 +82,21 @@ const MatchesPage = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterAnimation] = useState(new Animated.Value(0));
     const [showCompletionModal, setShowCompletionModal] = useState(false);
+    const [connectedUserIds, setConnectedUserIds] = useState(new Set());
+
+    // Feedback Modal State
+    const [feedbackVisible, setFeedbackVisible] = useState(false);
+    const [feedbackConfig, setFeedbackConfig] = useState({
+        type: 'info',
+        title: '',
+        message: '',
+        actions: []
+    });
+
+    const showFeedback = (type, title, message, actions = []) => {
+        setFeedbackConfig({ type, title, message, actions });
+        setFeedbackVisible(true);
+    };
 
     const quickFilters = useMemo(
         () => ({
@@ -246,13 +263,47 @@ const MatchesPage = () => {
         return Math.min(100, Math.round(matchedPercentage));
     };
 
-    const fetchSentInterests = async (senderId) => {
+    const fetchInterestsAndConnections = async (userId) => {
+        if (!userId) return [];
         try {
-            const res = await fetch(`${Config.API_URL}/api/interest/received?userId=${user?.id}`);
-            const data = await res.json();
-            return data.success ? data.interests.map((i) => i.receiver.id) : [];
+            console.log('Fetching interests for user:', userId);
+            
+            // 1. Fetch Sent Interests
+            const sentRes = await fetch(`${Config.API_URL}/api/interest/send?userId=${userId}`);
+            const sentData = await sentRes.json();
+            
+            // 2. Fetch Received Interests
+            const receivedRes = await fetch(`${Config.API_URL}/api/interest/received?userId=${userId}`);
+            const receivedData = await receivedRes.json();
+
+            let sentIds = [];
+            let connectedIds = new Set();
+
+            if (sentData.success) {
+                sentData.interests.forEach(i => {
+                    const receiverId = i.receiver?._id || i.receiver?.id || i.receiver;
+                    sentIds.push(receiverId);
+                    if (i.status === 'accepted') {
+                        connectedIds.add(receiverId);
+                    }
+                });
+            }
+
+            if (receivedData.success) {
+                receivedData.interests.forEach(i => {
+                    const senderId = i.sender?._id || i.sender?.id || i.sender;
+                    // If I accepted their interest, or they accepted mine (handled in sent loop), we are connected.
+                    if (i.status === 'accepted') {
+                        connectedIds.add(senderId);
+                    }
+                });
+            }
+
+            console.log('Connected IDs:', Array.from(connectedIds));
+            setConnectedUserIds(connectedIds);
+            return sentIds; 
         } catch (err) {
-            console.error('Error fetching sent interests:', err);
+            console.error('Error fetching interests/connections:', err);
             return [];
         }
     };
@@ -281,7 +332,8 @@ const MatchesPage = () => {
                 return;
             }
 
-            const sentReceiverIds = await fetchSentInterests(currentUserData._id);
+            const sentReceiverIds = await fetchInterestsAndConnections(currentUserData._id || currentUserData.id);
+            console.log('Final list of sent receiver IDs:', sentReceiverIds);
 
             let endpoint = `${Config.API_URL}/api/users/fetchAllUsers?limit=20&page=1`;
             if (query && query.trim().length > 0) {
@@ -429,9 +481,26 @@ const MatchesPage = () => {
         if (senderId === receiverId) return;
 
         const alreadySent = matches.find((m) => m._id === receiverId)?.interestSent;
-        if (alreadySent) return;
+        if (alreadySent) {
+            showFeedback('info', 'Interest Shared', 'You have already expressed interest in this person.');
+            return;
+        }
 
         if (!hasSubscription) {
+            showFeedback(
+                'info',
+                'Membership Required',
+                'You need a premium subscription to send interests.',
+                [
+                    { text: 'Cancel', style: 'cancel', onPress: () => setFeedbackVisible(false) },
+                    {
+                        text: 'Upgrade', onPress: () => {
+                            setFeedbackVisible(false);
+                            router.push('/(dashboard)/(tabs)/settings');
+                        }
+                    }
+                ]
+            );
             return;
         }
 
@@ -445,22 +514,29 @@ const MatchesPage = () => {
                 }),
             });
 
+            const data = await res.json();
+
             if (res.ok) {
                 setMatches((prev) =>
                     prev.map((match) => (match._id === receiverId ? { ...match, interestSent: true } : match))
                 );
+                showFeedback('success', 'Success', 'Interest sent successfully!');
+            } else {
+                showFeedback('error', 'Action Failed', data.message || 'Failed to send interest. Please try again.');
             }
         } catch (error) {
             console.error('Error sending interest:', error);
+            showFeedback('error', 'Network Error', 'Please check your connection and try again.');
         }
     };
 
     const handleImageClick = (match) => {
-        if (!hasSubscription) {
+        // Allow view if subscribed OR if the user is a connection (mutual accepted interest)
+        if (hasSubscription || connectedUserIds.has(match._id)) {
+            setSelectedProfile(match);
+        } else {
             router.push('/(dashboard)/(tabs)/settings');
-            return;
         }
-        setSelectedProfile(match);
     };
 
     const closeProfilePopup = () => {
@@ -488,7 +564,12 @@ const MatchesPage = () => {
 
         return (
             <Animated.View style={[styles.matchCard, { transform: [{ scale: scaleAnim }] }]}>
-                <View style={[styles.cardContainer, { backgroundColor: 'transparent' }]}>
+                <Pressable
+                    onPress={() => handleImageClick(match)}
+                    onPressIn={handlePressIn}
+                    onPressOut={handlePressOut}
+                    style={[styles.cardContainer, { backgroundColor: 'transparent' }]}
+                >
                     <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} />
                     <View style={{ flexDirection: 'row', flex: 1 }}>
                         {/* Left: Image Section */}
@@ -637,7 +718,7 @@ const MatchesPage = () => {
                             </View>
                         </View>
                     </View>
-                </View>
+                </Pressable>
             </Animated.View>
         );
     });
@@ -1038,6 +1119,15 @@ const MatchesPage = () => {
                     </View>
                 </Modal>
             )}
+            {/* Feedback Modal */}
+            <FeedbackModal
+                visible={feedbackVisible}
+                type={feedbackConfig.type}
+                title={feedbackConfig.title}
+                message={feedbackConfig.message}
+                actions={feedbackConfig.actions}
+                onClose={() => setFeedbackVisible(false)}
+            />
         </View>
     );
 };
