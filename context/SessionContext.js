@@ -162,24 +162,33 @@ export function SessionProvider({ children }) {
   // Login function
   const login = async (userId) => {
     try {
+      console.log('Attempting login for userId:', userId);
+      console.log('Login API URL:', `${Config.API_URL}/api/session`);
+
       const response = await fetch(`${Config.API_URL}/api/session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId }),
       });
 
+      console.log('Login Response Status:', response.status);
+
       if (response.ok) {
         const data = await response.json();
+        console.log('Login Success Data:', data);
         setUser(data.user);
         await AsyncStorage.setItem('user', JSON.stringify(data.user));
         await AsyncStorage.setItem('authToken', data.token);
         console.log('Logged in user ID:', data.user.id, 'Phone:', data.user?.phone || data.user?.phoneNumber);
         router.push('/(dashboard)/matches');  // Navigate to dashboard after successful login
         return true;
+      } else {
+        const errorData = await response.text();
+        console.error('Login Failed Response:', errorData);
       }
       return false;
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error('Login failed with exception:', error);
       return false;
     }
   };

@@ -699,8 +699,14 @@ export default function MaliBandhanLogin() {
     if (otpString === '123456') {
       const cleanedPhone = phoneNumber.replace(/\s/g, '');
       const fullPhoneNumber = `${countryCode}${cleanedPhone}`;
-      await login(fullPhoneNumber); // Use phone with country code as userId
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const success = await login(fullPhoneNumber); // Use phone with country code as userId
+
+      if (success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        setError('Login failed. Please check your internet connection.');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
     } else {
       setError('Invalid OTP');
     }
