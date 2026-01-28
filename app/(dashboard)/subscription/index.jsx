@@ -8,11 +8,11 @@ import {
   Star,
   Heart,
   Eye,
-  MessageCircle,
   Sparkles,
   Shield,
   Zap,
-  Gift
+  Gift,
+  Phone
 } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 import { useState, useEffect } from 'react';
@@ -226,12 +226,12 @@ export default function Subscription() {
 
           <View style={styles.benefitCard}>
             <View style={styles.benefitIconContainer}>
-              <MessageCircle size={24} color={Colors.primary} />
+              <Phone size={24} color={Colors.primary} />
             </View>
             <View style={styles.benefitContent}>
-              <Text style={styles.benefitTitle}>Unlimited Communication</Text>
+              <Text style={styles.benefitTitle}>View Contact Details</Text>
               <Text style={styles.benefitText}>
-                Chat with unlimited matches without restrictions
+                Get direct access to phone numbers of your matches
               </Text>
             </View>
           </View>

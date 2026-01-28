@@ -50,7 +50,7 @@ import {
   ToggleRight,
   XCircle,
   Phone,
-  ChevronDown
+  ArrowDown
 } from 'lucide-react-native';
 import { useSession } from '../../../context/SessionContext';
 import { useRouter } from 'expo-router';
@@ -109,7 +109,7 @@ const ProfileSectionHeader = ({ title, completion, onPress, isExpanded }) => {
           <Text style={{ color: Colors.textPrimary, fontWeight: '600', fontSize: 16, fontFamily: 'SpaceMono' }}>{title}</Text>
         </View>
         <Animated.View style={{ transform: [{ rotate }] }}>
-          <ChevronDown size={20} color={Colors.textSecondary} />
+          <ArrowDown size={20} color={Colors.textSecondary} />
         </Animated.View>
       </View>
     </TouchableOpacity>

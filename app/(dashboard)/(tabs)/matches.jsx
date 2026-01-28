@@ -35,7 +35,7 @@ import {
     MessageCircle,
     Users as UsersIcon,
     Navigation,
-    ChevronDown,
+    ArrowDown,
     SlidersHorizontal,
     X,
     Search,

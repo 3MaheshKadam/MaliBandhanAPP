@@ -33,8 +33,9 @@ import {
   Home,
   GraduationCap,
   DollarSign,
-  ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ArrowDown,
+  Phone
 } from 'lucide-react-native';
 import { useSession } from '../../../context/SessionContext';
 import { Config } from '@/constants/Config';
@@ -159,7 +160,8 @@ export default function InterestsPage() {
     const profileData = type === 'sent' ? person.receiver : person.sender;
     setSelectedProfile({
       ...profileData,
-      image: profileData?.profilePhoto || profileData?.image
+      image: profileData?.profilePhoto || profileData?.image,
+      interestStatus: person.status
     });
     setShowModal(true);
   };
@@ -337,7 +339,7 @@ export default function InterestsPage() {
         {expandedSections[sectionKey] ? (
           <ChevronUp size={20} color={Colors.textSecondary} />
         ) : (
-          <ChevronDown size={20} color={Colors.textSecondary} />
+          <ArrowDown size={20} color={Colors.textSecondary} />
         )}
       </TouchableOpacity>
       {expandedSections[sectionKey] && (
@@ -486,6 +488,21 @@ export default function InterestsPage() {
                   <ProfileDetailItem icon={Shield} label="Caste" value={selectedProfile.caste} />
                 </View>
               </ProfileSection>
+
+              {/* Contact Information - Only if Accepted & Subscribed */}
+              {hasSubscription && selectedProfile.interestStatus === 'accepted' && (
+                <ProfileSection title="Contact Information" sectionKey="contact">
+                  <View style={styles.sectionItems}>
+                    <ProfileDetailItem icon={Phone} label="Phone Number" value={selectedProfile.phone} />
+                    <ProfileDetailItem icon={Mail} label="Email Address" value={selectedProfile.email} />
+                    <View style={styles.lockNote}>
+                      <Text style={styles.lockNoteText}>
+                        Contact details are visible because this interest is accepted.
+                      </Text>
+                    </View>
+                  </View>
+                </ProfileSection>
+              )}
 
               {/* Family Details */}
               <ProfileSection title="Family Details" sectionKey="family">
@@ -796,6 +813,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     marginBottom: 12,
+  },
+  lockNote: {
+    padding: 8,
+    backgroundColor: Colors.lightSuccess,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  lockNoteText: {
+    fontSize: 12,
+    color: Colors.success,
+    fontFamily: 'SpaceMono',
   },
   detailIcon: {
     backgroundColor: Colors.secondaryLight,

@@ -613,7 +613,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ArrowRight, Phone, Shield, RotateCcw, Edit, ChevronDown } from 'lucide-react-native';
+import { ArrowRight, Phone, Shield, RotateCcw, Edit, ArrowDown } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useSession } from '@/context/SessionContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -784,7 +784,7 @@ export default function MaliBandhanLogin() {
                         <Text style={[styles.countryCodeText, { color: Colors.textPrimary }]}>
                           🇮🇳 +91
                         </Text>
-                        <ChevronDown size={16} color={Colors.textSecondary} />
+                        <ArrowDown size={16} color={Colors.textSecondary} />
                       </View>
                       <TextInput
                         style={[styles.input, {

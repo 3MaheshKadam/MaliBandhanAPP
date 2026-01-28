@@ -18,7 +18,7 @@ import {
   Gift,
   AlertCircle,
   LogOut,
-  ChevronDown,
+  ArrowDown,
   ChevronUp,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -203,7 +203,7 @@ const FAQItem = ({ question, answer, isExpanded, onToggle }) => {
       >
         <Text style={{ fontSize: 16, fontWeight: '600', color: Colors.textPrimary, flex: 1, fontFamily: 'SpaceMono' }}>{question}</Text>
         <Animated.View style={{ transform: [{ rotate }] }}>
-          {isExpanded ? <ChevronUp size={20} color={Colors.primary} /> : <ChevronDown size={20} color={Colors.primary} />}
+          {isExpanded ? <ChevronUp size={20} color={Colors.primary} /> : <ArrowDown size={20} color={Colors.primary} />}
         </Animated.View>
       </TouchableOpacity>
       {isExpanded && (
