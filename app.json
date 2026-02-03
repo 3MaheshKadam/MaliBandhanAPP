@@ -48,9 +48,8 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "1cc65a09-b6f4-4c70-bf81-0147c8934bd8"
+        "projectId": "e0c214e6-71cc-4ce6-b429-4cb3f1b914b5"
       }
-    },
-    "owner": "harshalladukar"
+    }
   }
 }
