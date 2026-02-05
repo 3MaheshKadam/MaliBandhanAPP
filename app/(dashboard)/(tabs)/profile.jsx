@@ -14,8 +14,10 @@ import {
   Dimensions,
   Animated,
   Easing,
-  StyleSheet
+  StyleSheet,
+  Platform
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   User,
   Heart,
@@ -60,6 +62,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Colors } from '@/constants/Colors';
 import { Config } from '@/constants/Config';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 
@@ -159,29 +162,64 @@ const FormInput = ({ label, value, onChange, placeholder, type = 'text', options
   }
 
   if (type === 'date') {
+    const [showDatePicker, setShowDatePicker] = useState(false);
+
+    // Parse current value or use today
+    const dateValue = value ? new Date(value) : new Date();
+    // Validate date (if invalid string, fallback to today)
+    const validDate = isNaN(dateValue.getTime()) ? new Date() : dateValue;
+
+    const onDateChange = (event, selectedDate) => {
+      setShowDatePicker(Platform.OS === 'ios');
+      if (selectedDate) {
+        // Format as YYYY-MM-DD for consistency
+        const formattedDate = selectedDate.toISOString().split('T')[0];
+        onChange(formattedDate);
+      }
+    };
+
     return (
       <View style={{ marginBottom: 20 }}>
         <Text style={{ color: Colors.textSecondary, marginBottom: 8, fontSize: 14, fontFamily: 'SpaceMono' }}>
           {label}
           {required && <Text style={{ color: Colors.danger }}>*</Text>}
         </Text>
-        <TextInput
-          value={value}
-          onChangeText={onChange}
-          placeholder={placeholder}
-          placeholderTextColor={Colors.textLight}
+
+        <TouchableOpacity
+          onPress={() => setShowDatePicker(true)}
           style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
             width: '100%',
             padding: 16,
             borderWidth: 1,
             borderColor: Colors.borderLight,
             borderRadius: 12,
-            color: Colors.textPrimary,
             backgroundColor: Colors.backgroundSecondary,
-            fontFamily: 'SpaceMono'
           }}
-          keyboardType="numeric"
-        />
+        >
+          <Text style={{
+            color: value ? Colors.textPrimary : Colors.textLight,
+            fontFamily: 'SpaceMono',
+            fontSize: 16
+          }}>
+            {value || placeholder || 'Select Date'}
+          </Text>
+          <Calendar size={20} color={Colors.textSecondary} />
+        </TouchableOpacity>
+
+        {showDatePicker && (
+          <DateTimePicker
+            testID="dateTimePicker"
+            value={validDate}
+            mode="date"
+            is24Hour={true}
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={onDateChange}
+            maximumDate={new Date()} // DOB cannot be in future
+          />
+        )}
       </View>
     );
   }
@@ -280,6 +318,7 @@ export default function MyProfilePage() {
   const [dontAskAgain, setDontAskAgain] = useState(false);
   const [showCompletionUpdate, setShowCompletionUpdate] = useState(false);
   const [expandedSections, setExpandedSections] = useState({});
+  const insets = useSafeAreaInsets();
 
   // Animation values
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
@@ -362,100 +401,114 @@ export default function MyProfilePage() {
     return name.toLowerCase().replace(/[^a-z0-9]/g, '');
   };
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        // Fetch form sections structure
-        const sectionsRes = await fetch(`${Config.API_URL}/api/admin/form-sections`, {
-          credentials: 'include'
-        });
-        const sectionsData = await sectionsRes.json();
+  const loadData = React.useCallback(async () => {
+    try {
+      if (!formSections.length) setIsLoading(true); // Show full loader only if no data
 
-        const transformedSections = sectionsData.map(section => ({
-          ...section,
-          id: section._id,
-          fields: section.fields.map(field => ({
-            ...field,
-            name: field.name,
-            label: field.label,
-            type: field.type,
-            required: field.required,
-            options: field.options || [],
-            placeholder: field.placeholder || ''
-          }))
-        }));
+      // Fetch form sections structure
+      const sectionsRes = await fetch(`${Config.API_URL}/api/admin/form-sections`, {
+        credentials: 'include'
+      });
+      const sectionsData = await sectionsRes.json();
 
-        setFormSections(transformedSections);
-        const initialExpanded = {};
-        transformedSections.forEach(section => {
-          initialExpanded[section._id] = section._id === transformedSections[0]?._id;
-        });
-        setExpandedSections(initialExpanded);
-        setActiveTab(transformedSections[0]?._id || '');
+      const transformedSections = sectionsData.map(section => ({
+        ...section,
+        id: section._id,
+        fields: section.fields.map(field => ({
+          ...field,
+          name: field.name,
+          label: field.label,
+          type: field.type,
+          required: field.required,
+          options: field.options || [],
+          placeholder: field.placeholder || ''
+        }))
+      }));
 
-        // Fetch user data
-        const userRes = await fetch(`${Config.API_URL}/api/users/me`, {
-          credentials: 'include'
-        });
-        const userData = await userRes.json();
+      setFormSections(transformedSections);
 
-        // Create initial form data state
-        const initialFormData = {};
-        transformedSections.forEach(section => {
-          section.fields.forEach(field => {
-            const mappingEntry = Object.entries(fieldNameMappings).find(
-              ([key]) => normalizeFieldName(key) === normalizeFieldName(field.name)
-            );
-            if (mappingEntry) {
-              const [_, backendField] = mappingEntry;
-              if (userData[backendField] !== undefined) {
-                initialFormData[field.name] = userData[backendField];
-              }
-            } else if (userData[field.name] !== undefined) {
-              initialFormData[field.name] = userData[field.name];
-            }
+      // Only set initial expanded state if not already set
+      setExpandedSections(prev => {
+        if (Object.keys(prev).length === 0) {
+          const initialExpanded = {};
+          transformedSections.forEach(section => {
+            initialExpanded[section._id] = section._id === transformedSections[0]?._id;
           });
-        });
+          return initialExpanded;
+        }
+        return prev;
+      });
 
-        Object.keys(userData).forEach(key => {
-          if (!initialFormData[key]) {
-            initialFormData[key] = userData[key];
+      if (!activeTab && transformedSections.length > 0) {
+        setActiveTab(transformedSections[0]?._id);
+      }
+
+      // Fetch user data
+      const userRes = await fetch(`${Config.API_URL}/api/users/me`, {
+        credentials: 'include'
+      });
+      const userData = await userRes.json();
+
+      // Create initial form data state
+      const initialFormData = {};
+      transformedSections.forEach(section => {
+        section.fields.forEach(field => {
+          const mappingEntry = Object.entries(fieldNameMappings).find(
+            ([key]) => normalizeFieldName(key) === normalizeFieldName(field.name)
+          );
+          if (mappingEntry) {
+            const [_, backendField] = mappingEntry;
+            if (userData[backendField] !== undefined) {
+              initialFormData[field.name] = userData[backendField];
+            }
+          } else if (userData[field.name] !== undefined) {
+            initialFormData[field.name] = userData[field.name];
           }
         });
+      });
 
-        setFormData(initialFormData);
-
-        // Update photos
-        if (userData.profilePhoto) {
-          setPhotos(prevPhotos =>
-            prevPhotos.map(photo =>
-              photo.id === 1 ? { ...photo, url: userData.profilePhoto } : photo
-            )
-          );
+      Object.keys(userData).forEach(key => {
+        if (!initialFormData[key]) {
+          initialFormData[key] = userData[key];
         }
+      });
 
-        // Set admin fill preference
-        if (userData.profileSetup?.willAdminFill !== undefined) {
-          setAdminWillFill(userData.profileSetup.willAdminFill);
-          setDontAskAgain(userData.profileSetup.dontAskAgain || false);
-          setShowFormFillChoice(!userData.profileSetup.willAdminFill && !userData.profileSetup.dontAskAgain);
-        }
+      setFormData(initialFormData);
 
-        // Set verification status
-        if (userData.verificationStatus) {
-          setVerificationStatus(userData.verificationStatus);
-        }
-
-        setIsLoading(false);
-        setIsLoaded(true);
-      } catch (error) {
-        console.error("Error loading data:", error);
-        setIsLoading(false);
+      // Update photos
+      if (userData.profilePhoto) {
+        setPhotos(prevPhotos =>
+          prevPhotos.map(photo =>
+            photo.id === 1 ? { ...photo, url: userData.profilePhoto } : photo
+          )
+        );
       }
-    };
 
+      // Set admin fill preference
+      if (userData.profileSetup?.willAdminFill !== undefined) {
+        setAdminWillFill(userData.profileSetup.willAdminFill);
+        setDontAskAgain(userData.profileSetup.dontAskAgain || false);
+        setShowFormFillChoice(!userData.profileSetup.willAdminFill && !userData.profileSetup.dontAskAgain);
+      }
+
+      // Set verification status
+      if (userData.verificationStatus) {
+        setVerificationStatus(userData.verificationStatus);
+      }
+
+      setIsLoading(false);
+      setIsLoaded(true);
+    } catch (error) {
+      console.error("Error loading data:", error);
+      setIsLoading(false);
+      // Even if error, set loaded to true to stop refresh spinner
+      setIsLoaded(true);
+    }
+  }, []); // Dependencies can be empty if setState functions are stable
+
+  useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   useEffect(() => {
     if (Object.keys(formData).length > 0 && formSections.length > 0) {
@@ -1152,20 +1205,14 @@ export default function MyProfilePage() {
       >
         <ScrollView
           style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
           refreshControl={
             <RefreshControl
               refreshing={!isLoaded}
               onRefresh={() => {
-                setIsLoading(true);
+                // Do not clear all state, just reload to keep UX smooth
                 setIsLoaded(false);
-                setFormSections([]);
-                setFormData({});
-                setPhotos([
-                  { id: 1, url: null, isPrimary: true },
-                  { id: 2, url: null, isPrimary: false },
-                  { id: 3, url: null, isPrimary: false },
-                  { id: 4, url: null, isPrimary: false },
-                ]);
+                loadData();
               }}
               tintColor={Colors.primary}
             />
@@ -1429,7 +1476,6 @@ export default function MyProfilePage() {
               </TouchableOpacity>
             </View>
           </View>
-          <View style={{ height: 60 }} />
         </ScrollView>
         {/* {renderCompletionUpdate()} */}
         {/* {renderFormFillChoiceModal()} */}

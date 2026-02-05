@@ -366,24 +366,6 @@
 //     justifyContent: 'center',
 //   },
 //   card: {
-//     borderRadius: 20,
-//     overflow: 'hidden',
-//     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-//     shadowColor: '#000',
-//     shadowOffset: { width: 0, height: 2 },
-//     shadowOpacity: 0.1,
-//     shadowRadius: 8,
-//     elevation: 4,
-//   },
-//   header: {
-//     alignItems: 'center',
-//     paddingTop: 32,
-//     paddingBottom: 24,
-//     paddingHorizontal: 24,
-//   },
-//   logoContainer: {
-//     width: 60,
-//     height: 60,
 //     backgroundColor: '#FF2D55',
 //     borderRadius: 12,
 //     justifyContent: 'center',
@@ -518,7 +500,6 @@
 //     padding: 12,
 //     borderRadius: 10,
 //     borderWidth: 1,
-//     borderColor: '#FEE2E2',
 //   },
 //   errorText: {
 //     fontSize: 13,
@@ -653,6 +634,15 @@ export default function MaliBandhanLogin() {
     }
   }, [resendTimer]);
 
+  // Auto-focus OTP when step determines to 2
+  useEffect(() => {
+    if (step === 2) {
+      setTimeout(() => {
+        otpInputs.current[0]?.focus();
+      }, 500); // Small delay to let animation finish
+    }
+  }, [step]);
+
   const validatePhoneNumber = (phone) => {
     const phoneRegex = /^[6-9]\d{9}$/;
     return phoneRegex.test(phone.replace(/\s/g, ''));
@@ -780,7 +770,7 @@ export default function MaliBandhanLogin() {
                 <View style={styles.form}>
                   <View style={styles.inputGroup}>
                     <View style={styles.phoneInputContainer}>
-                      <View style={[styles.countryCode, { borderColor: Colors.borderLight }]}>
+                      <View style={[styles.countryCode, { borderColor: '#475569' }]}>
                         <Text style={[styles.countryCodeText, { color: Colors.textPrimary }]}>
                           🇮🇳 +91
                         </Text>
@@ -788,7 +778,7 @@ export default function MaliBandhanLogin() {
                       </View>
                       <TextInput
                         style={[styles.input, {
-                          borderColor: Colors.borderLight,
+                          borderColor: '#475569',
                           color: Colors.textPrimary
                         }]}
                         value={phoneNumber}
@@ -862,7 +852,7 @@ export default function MaliBandhanLogin() {
                           key={index}
                           ref={(ref) => (otpInputs.current[index] = ref)}
                           style={[styles.otpInput, {
-                            borderColor: digit ? Colors.primary : Colors.borderLight,
+                            borderColor: digit ? Colors.primary : '#475569',
                             color: Colors.textPrimary,
                             backgroundColor: digit ? Colors.secondaryLight : Colors.white
                           }]}
@@ -1006,9 +996,14 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
     borderWidth: 1,
-    borderColor: 'rgba(155, 107, 158, 0.08)',
+    borderColor: '#CBD5E1', // Added darker border to card
   },
   header: {
     alignItems: 'center',

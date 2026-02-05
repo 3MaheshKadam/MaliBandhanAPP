@@ -41,12 +41,14 @@ import { useSession } from '../../../context/SessionContext';
 import { Config } from '@/constants/Config';
 import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/Colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
 export default function InterestsPage() {
   const { user } = useSession();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   // All state declarations
   const [activeTab, setActiveTab] = useState('received');
@@ -533,6 +535,7 @@ export default function InterestsPage() {
       {/* Main Content */}
       <ScrollView
         style={styles.mainScroll}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
