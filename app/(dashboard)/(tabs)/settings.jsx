@@ -27,6 +27,7 @@ import { useSession } from '../../../context/SessionContext';
 import { Config } from '@/constants/Config';
 import { useRouter } from 'expo-router';
 import { Colors } from '@/constants/Colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -95,14 +96,14 @@ const PlanCard = ({ plan, isCurrentPlan, isButtonLoading, config, onSubscribe })
           >
             <IconComponent size={32} color={config.textColor} />
           </View>
-          <Text style={{ fontSize: 20, fontWeight: '700', color: Colors.textPrimary, marginBottom: 4, fontFamily: 'SpaceMono' }}>
+          <Text style={{ fontSize: 22, fontWeight: '800', color: Colors.textPrimary, marginBottom: 4, fontFamily: 'SpaceMono' }}>
             {config.emoji} {plan.name}
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ fontSize: 24, fontWeight: '700', color: config.textColor, fontFamily: 'SpaceMono' }}>
+            <Text style={{ fontSize: 32, fontWeight: '800', color: config.textColor, fontFamily: 'SpaceMono' }}>
               ₹{formatPrice(plan.price)}
             </Text>
-            <Text style={{ fontSize: 14, color: Colors.textSecondary, marginLeft: 4, fontFamily: 'SpaceMono' }}>
+            <Text style={{ fontSize: 16, color: Colors.textSecondary, marginLeft: 4, fontFamily: 'SpaceMono', fontWeight: '600' }}>
               /{getDurationText(plan.durationInDays)}
             </Text>
           </View>
@@ -123,7 +124,7 @@ const PlanCard = ({ plan, isCurrentPlan, isButtonLoading, config, onSubscribe })
               >
                 <Check size={16} color={config.textColor} />
               </View>
-              <Text style={{ fontSize: 14, color: Colors.textPrimary, fontWeight: '500', fontFamily: 'SpaceMono', flex: 1 }}>{feature}</Text>
+              <Text style={{ fontSize: 16, color: Colors.textPrimary, fontWeight: '600', fontFamily: 'SpaceMono', flex: 1 }}>{feature}</Text>
             </View>
           ))}
         </View>
@@ -147,7 +148,7 @@ const PlanCard = ({ plan, isCurrentPlan, isButtonLoading, config, onSubscribe })
                 marginRight: 6,
               }}
             />
-            <Text style={{ fontSize: 12, color: plan.isActive ? Colors.success : Colors.danger, fontWeight: '500', fontFamily: 'SpaceMono' }}>
+            <Text style={{ fontSize: 13, color: plan.isActive ? Colors.success : Colors.danger, fontWeight: '600', fontFamily: 'SpaceMono' }}>
               {plan.isActive ? 'Active' : 'Inactive'}
             </Text>
           </View>
@@ -168,7 +169,7 @@ const PlanCard = ({ plan, isCurrentPlan, isButtonLoading, config, onSubscribe })
           {isButtonLoading ? (
             <ActivityIndicator color={config.textColor} />
           ) : (
-            <Text style={{ color: config.textColor, fontWeight: '600', fontSize: 16, fontFamily: 'SpaceMono' }}>
+            <Text style={{ color: config.textColor, fontWeight: '700', fontSize: 18, fontFamily: 'SpaceMono' }}>
               {isCurrentPlan ? '🎉 Currently Active' : 'Subscribe Now'}
             </Text>
           )}
@@ -227,6 +228,7 @@ export default function SettingsPage() {
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [activeButtonId, setActiveButtonId] = useState(null);
   const [expandedFAQ, setExpandedFAQ] = useState(null);
+  const insets = useSafeAreaInsets();
 
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
@@ -433,7 +435,7 @@ export default function SettingsPage() {
     <View
       style={{ flex: 1, backgroundColor: 'transparent' }}
     >
-      <ScrollView style={{ flex: 1 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}>
         <Animated.View style={{ opacity: fadeAnim, padding: 20 }}>
           <View style={{ alignItems: 'center', marginBottom: 24 }}>
             <View
@@ -542,7 +544,6 @@ export default function SettingsPage() {
             />
           </View>
         </Animated.View>
-        <View style={{ height: 60 }} />
       </ScrollView>
     </View>
   );

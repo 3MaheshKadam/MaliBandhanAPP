@@ -14,6 +14,7 @@ import {
     Pressable,
     Modal,
     ActivityIndicator,
+    Switch,
 } from 'react-native';
 import {
     Heart,
@@ -63,7 +64,49 @@ const maskFirstName = (fullName) => {
 // Helper function for case-insensitive city comparison
 const isSameCity = (city1, city2) => {
     if (!city1 || !city2) return false;
-    return city1.toLowerCase() === city2.toLowerCase();
+    const c1 = city1.toLowerCase().trim();
+    const c2 = city2.toLowerCase().trim();
+    return c1.includes(c2) || c2.includes(c1);
+};
+
+// Levenshtein distance for fuzzy matching (typo tolerance)
+const getLevenshteinDistance = (a, b) => {
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1,
+                    Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1)
+                );
+            }
+        }
+    }
+    return matrix[b.length][a.length];
+};
+
+const isFuzzyMatch = (value, filter) => {
+    if (!filter) return true;
+    if (!value) return false;
+
+    // Normalize: lowercase, remove special chars, collapse multiple spaces
+    const v = value.toString().toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    const f = filter.toString().toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+
+    // 1. Direct match or substring
+    if (v.includes(f) || f.includes(v)) return true;
+
+    // 2. Typo tolerance (Levenshtein)
+    // Allow 1 typo for short words (<=4), 2 typos for longer words
+    const distance = getLevenshteinDistance(v, f);
+    const threshold = f.length <= 4 ? 1 : 2;
+
+    return distance <= threshold;
 };
 
 import FeedbackModal from '@/components/FeedbackModal';
@@ -82,6 +125,9 @@ const MatchesPage = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterAnimation] = useState(new Animated.Value(0));
     const [showCompletionModal, setShowCompletionModal] = useState(false);
+    const [missingFields, setMissingFields] = useState([]); // Added state for missing fields
+    const [isProfileIncomplete, setIsProfileIncomplete] = useState(false); // Added state
+    const [showFilterModal, setShowFilterModal] = useState(false); // Added for Filter Modal
     const [connectedUserIds, setConnectedUserIds] = useState(new Set());
 
     // Feedback Modal State
@@ -100,20 +146,26 @@ const MatchesPage = () => {
 
     const quickFilters = useMemo(
         () => ({
-            withPhoto: null,
-            verified: null,
-            activeRecently: null,
-            sameCity: null,
-            ageRange: [null, null],
-            heightRange: [null, null],
-            education: null,
-            income: null,
+            gender: 'All', // Added Gender
+            ageRange: [18, 60], // Added Age Range defaults
+            location: '', // City/State/District
+            maritalStatus: [], // Array for multiple selection
+            caste: '',
+            subCaste: '', // Added Sub-caste
+            education: '', // Level (Graduate/PG/etc)
+            occupation: '', // Category
+            diet: 'Any', // Added Diet
+            withPhoto: false, // Default false, toggleable
+            activeRecently: false // Default false
         }),
         []
     );
 
     const [filters, setFilters] = useState(quickFilters);
     const insets = useSafeAreaInsets();
+
+    // Robustly get current user's city (handle potential nesting)
+    const currentUserCity = user?.currentCity || user?.user?.currentCity;
 
     useEffect(() => {
         const initialize = async () => {
@@ -128,6 +180,11 @@ const MatchesPage = () => {
     // Debounced search effect
     useEffect(() => {
         if (!isLoaded) return;
+
+        // Auto-switch to 'all' tab when searching to prevent local filtering hiding results
+        if (searchQuery.trim().length > 0) {
+            setActiveTab('all');
+        }
 
         const timeoutId = setTimeout(() => {
             fetchUsers(searchQuery);
@@ -332,14 +389,44 @@ const MatchesPage = () => {
             const currentUserData = await currentUserRes.json();
 
             // Profile Completion Check
-            const essentialFields = ['dob', 'height', 'currentCity', 'education', 'income', 'maritalStatus', 'caste'];
-            const isProfileIncomplete = essentialFields.some(field => !currentUserData[field]);
+            // Handle potential data wrapper
+            const userObj = currentUserData.data || currentUserData;
 
-            if (isProfileIncomplete) {
+            // Profile Completion Check - stricter requirements including Partner Preferences
+            const essentialFields = [
+                'dob', 'height', 'currentCity', 'education', 'income', 'maritalStatus', 'caste',
+                'expectedAgeDifference', 'expectedHeight', 'expectedEducation', 'expectedIncome'
+            ];
+            const missingFields = essentialFields.filter(field => {
+                const val = userObj[field];
+                return val === null || val === undefined || (typeof val === 'string' && val.trim() === '');
+            });
+
+            // DEBUG ALERT - REMOVE AFTER FIXING
+            /*
+            alert(JSON.stringify({
+                dob: userObj.dob,
+                height: userObj.height,
+                city: userObj.currentCity,
+                edu: userObj.education,
+                inc: userObj.income,
+                ms: userObj.maritalStatus,
+                caste: userObj.caste,
+                missing: missingFields
+            }, null, 2));
+            */
+
+            if (missingFields.length > 0) {
+                console.log('Profile incomplete. Missing:', missingFields);
+                setMissingFields(missingFields);
+                setIsProfileIncomplete(true);
                 setShowCompletionModal(true);
                 setIsLoading(false);
-                setMatches([]); // Clear matches if profile is incomplete
+                setMatches([]);
                 return;
+            } else {
+                setMissingFields([]);
+                setIsProfileIncomplete(false);
             }
 
             const sentReceiverIds = await fetchInterestsAndConnections(currentUserData._id || currentUserData.id);
@@ -355,10 +442,18 @@ const MatchesPage = () => {
 
             if (data.success) {
                 const enriched = data.data
-                    .filter(
-                        (matchUser) =>
-                            matchUser._id !== currentUserData.id &&
-                            matchUser.gender !== currentUserData.gender &&
+                    .filter((matchUser) => {
+                        // Basic filtering: Self and Gender
+                        // Note: currentUserData might use _id or id depending on API response
+                        const currentUserId = currentUserData.id || currentUserData._id;
+                        if (matchUser._id === currentUserId) return false;
+                        if (matchUser.gender === currentUserData.gender) return false;
+
+                        // If searching, show all matching results regardless of profile completeness
+                        if (query && query.trim().length > 0) return true;
+
+                        // If browsing (no search), require complete profile for quality
+                        return (
                             matchUser.dob &&
                             matchUser.height &&
                             matchUser.currentCity &&
@@ -366,7 +461,8 @@ const MatchesPage = () => {
                             matchUser.income &&
                             matchUser.maritalStatus &&
                             matchUser.caste
-                    )
+                        );
+                    })
                     .map((matchUser) => {
                         const compatibility = calculateCompatibility(currentUserData, {
                             ...matchUser,
@@ -399,27 +495,39 @@ const MatchesPage = () => {
         }
     };
 
+
+
     const tabs = useMemo(
         () => [
             { id: 'all', label: 'All', count: matches.filter((m) => m.compatibility > 0).length, icon: UsersIcon },
-            { id: 'preferred', label: 'Top', count: matches.filter((m) => m.compatibility >= 70).length, icon: Star },
+            // { id: 'preferred', label: 'Top', count: matches.filter((m) => m.compatibility >= 70).length, icon: Star }, // Removed Top
             { id: 'new', label: 'New', count: matches.filter((m) => m.isNew).length, icon: Sparkles },
             {
                 id: 'nearby',
                 label: 'Nearby',
-                count: matches.filter((m) => isSameCity(m.currentCity, user?.currentCity)).length,
+                count: matches.filter((m) => isSameCity(m.currentCity, currentUserCity)).length,
                 icon: Navigation,
             },
+            { id: 'filter', label: 'Filter', count: 0, icon: Filter }, // Added Filter Tab
         ],
-        [matches, user?.currentCity]
+        [matches, currentUserCity]
     );
 
     const filteredMatches = useMemo(
         () =>
             matches
                 .filter((match) => {
-                    if (match.compatibility <= 0) return false;
                     let shouldShow = true;
+
+                    // DEBUG: Trace filtering for matching user
+                    if (match.name.includes('Ananya')) {
+                        console.log('Filtering Ananya:', {
+                            activeTab,
+                            filters,
+                            currentUserCity,
+                            matchCity: match.currentCity
+                        });
+                    }
 
                     // Server-side search handles the query now, so we remove the client-side check
                     // if (searchQuery) {
@@ -429,49 +537,62 @@ const MatchesPage = () => {
                     if (activeTab !== 'all') {
                         if (activeTab === 'preferred' && match.compatibility < 70) return false;
                         if (activeTab === 'new' && !match.isNew) return false;
-                        if (activeTab === 'nearby' && !isSameCity(match.currentCity, user?.currentCity)) return false;
+                        if (activeTab === 'nearby' && !isSameCity(match.currentCity, currentUserCity)) return false;
                     }
 
-                    if (filters.withPhoto !== null) {
-                        shouldShow = shouldShow && filters.withPhoto === !!match.hasPhoto;
-                    }
-                    if (filters.verified !== null) {
-                        shouldShow = shouldShow && filters.verified === !!match.isVerified;
-                    }
-                    if (filters.activeRecently !== null) {
-                        shouldShow = shouldShow && filters.activeRecently !== match.lastActive.includes('day');
-                    }
-                    if (filters.sameCity !== null) {
-                        shouldShow = shouldShow && filters.sameCity === isSameCity(match.currentCity, user?.currentCity);
+                    // 1. Gender Filter
+                    if (filters.gender !== 'All' && filters.gender) {
+                        shouldShow = shouldShow && match.gender === filters.gender;
                     }
 
+                    // 2. Age Range Filter
                     if (filters.ageRange[0] !== null && filters.ageRange[1] !== null) {
                         shouldShow = shouldShow && match.age >= filters.ageRange[0] && match.age <= filters.ageRange[1];
                     }
 
-                    if (filters.heightRange[0] && filters.heightRange[1]) {
-                        const convertHeightToInches = (heightStr) => {
-                            if (!heightStr) return 0;
-                            const parts = heightStr.match(/(\d+)'(\d+)"/);
-                            if (!parts) return 0;
-                            const feet = parseInt(parts[1]);
-                            const inches = parseInt(parts[2]);
-                            return feet * 12 + inches;
-                        };
-
-                        const matchHeightInches = convertHeightToInches(match.height);
-                        const minHeightInches = convertHeightToInches(filters.heightRange[0]);
-                        const maxHeightInches = convertHeightToInches(filters.heightRange[1]);
-
-                        shouldShow = shouldShow && matchHeightInches >= minHeightInches && matchHeightInches <= maxHeightInches;
+                    // 3. Location Filter (City/District/State) - Fuzzy Match
+                    if (filters.location) {
+                        shouldShow = shouldShow && isFuzzyMatch(match.currentCity, filters.location);
                     }
 
+                    // 4. Marital Status Filter (Multiple Selection)
+                    if (filters.maritalStatus.length > 0) {
+                        shouldShow = shouldShow && filters.maritalStatus.includes(match.maritalStatus);
+                    }
+
+                    // 5. Community Filters
+                    if (filters.caste) {
+                        shouldShow = shouldShow && isFuzzyMatch(match.caste, filters.caste);
+                    }
+                    if (filters.subCaste) {
+                        // Assuming subCaste field exists or is part of caste string
+                        shouldShow = shouldShow && isFuzzyMatch(match.subCaste, filters.subCaste);
+                    }
+
+                    // 6. Education & Work
                     if (filters.education) {
-                        shouldShow = shouldShow && match.education === filters.education;
+                        shouldShow = shouldShow && isFuzzyMatch(match.education, filters.education);
+                    }
+                    if (filters.occupation) {
+                        shouldShow = shouldShow && isFuzzyMatch(match.occupation, filters.occupation);
                     }
 
-                    if (filters.income) {
-                        shouldShow = shouldShow && match.income === filters.income;
+                    // 7. Lifestyle (Diet)
+                    if (filters.diet !== 'Any' && filters.diet) {
+                        // Robust check if diet field is missing
+                        shouldShow = shouldShow && (match.diet === filters.diet);
+                    }
+
+                    // 8. Quick Filters
+                    if (filters.withPhoto) {
+                        shouldShow = shouldShow && !!match.hasPhoto;
+                    }
+                    if (filters.activeRecently) {
+                        // "Recently" usually means within 7 or 30 days.
+                        // Our match.lastActive is a string like "Recently", "Today".
+                        // Logic depending on string values:
+                        const recentStrings = ['Recently', 'Today', '1 day ago', '2 days ago'];
+                        shouldShow = shouldShow && recentStrings.includes(match.lastActive);
                     }
 
                     return shouldShow;
@@ -484,7 +605,7 @@ const MatchesPage = () => {
                     if (sortBy === 'age_high') return b.age - a.age;
                     return 0;
                 }),
-        [matches, searchQuery, activeTab, filters, sortBy, user?.currentCity]
+        [matches, searchQuery, activeTab, filters, sortBy, currentUserCity]
     );
 
     const handleSendInterest = async (senderId, receiverId) => {
@@ -748,12 +869,36 @@ const MatchesPage = () => {
         );
     });
 
-    const EmptyState = memo(({ isLoading }) => (
+    const EmptyState = memo(({ isLoading, isProfileIncomplete }) => (
         <View style={styles.emptyContainer}>
             {isLoading ? (
                 <View style={styles.loadingContainer}>
                     <ActivityIndicator size="large" color={Colors.primary} />
                     <Text style={styles.loadingTitle}>Finding Matches...</Text>
+                </View>
+            ) : isProfileIncomplete ? (
+                <View style={{ alignItems: 'center', gap: 16 }}>
+                    <View style={styles.emptyIconContainer}>
+                        <User size={40} color={Colors.primary} />
+                    </View>
+                    <Text style={styles.emptyTitle}>Incomplete Profile</Text>
+                    <Text style={styles.emptySubtitle}>
+                        You need to complete your profile to see matches.
+                    </Text>
+                    <TouchableOpacity
+                        onPress={() => router.push('/(dashboard)/profile')}
+                        style={{
+                            backgroundColor: Colors.primary,
+                            paddingHorizontal: 24,
+                            paddingVertical: 12,
+                            borderRadius: 24,
+                            marginTop: 8
+                        }}
+                    >
+                        <Text style={{ color: Colors.white, fontWeight: '600', fontFamily: 'SpaceMono' }}>
+                            Complete Profile
+                        </Text>
+                    </TouchableOpacity>
                 </View>
             ) : (
                 <>
@@ -1032,7 +1177,13 @@ const MatchesPage = () => {
                         return (
                             <Pressable
                                 key={tab.id}
-                                onPress={() => setActiveTab(tab.id)}
+                                onPress={() => {
+                                    if (tab.id === 'filter') {
+                                        setShowFilterModal(true);
+                                    } else {
+                                        setActiveTab(tab.id);
+                                    }
+                                }}
                                 style={[styles.bubbleTab, isActive && styles.bubbleTabActive]}
                             >
                                 <Icon size={14} color={isActive ? Colors.white : Colors.primary} />
@@ -1094,12 +1245,12 @@ const MatchesPage = () => {
                     data={filteredMatches}
                     renderItem={({ item }) => <MatchCard match={item} />}
                     keyExtractor={(item) => item._id}
-                    contentContainerStyle={styles.listContent}
+                    contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 80 }]}
                     showsVerticalScrollIndicator={false}
                     ListHeaderComponent={<View style={{ height: showQuickFilters ? 50 : 4 }} />}
                 />
             ) : (
-                <EmptyState isLoading={isLoading} />
+                <EmptyState isLoading={isLoading} isProfileIncomplete={isProfileIncomplete} />
             )}
 
             {selectedProfile && (
@@ -1109,12 +1260,259 @@ const MatchesPage = () => {
                     hasSubscription={hasSubscription}
                 />
             )}
+            {/* Filter Modal */}
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={showFilterModal}
+                onRequestClose={() => setShowFilterModal(false)}
+            >
+                <View style={styles.modalContainer}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: Colors.textPrimary }]}>Filters</Text>
+                            <Pressable onPress={() => setShowFilterModal(false)}>
+                                <X size={24} color={Colors.textPrimary} />
+                            </Pressable>
+                        </View>
+                        <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+                            <View style={{ padding: 20, gap: 24 }}>
+
+                                {/* Section 1: Basic Details */}
+                                <View>
+                                    <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.primary, marginBottom: 12, fontFamily: 'SpaceMono' }}>
+                                        Basic Details
+                                    </Text>
+
+                                    {/* Gender */}
+                                    <View style={{ marginBottom: 16 }}>
+                                        <Text style={styles.gridLabel}>Gender</Text>
+                                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                                            {['All', 'Male', 'Female'].map(g => (
+                                                <TouchableOpacity
+                                                    key={g}
+                                                    onPress={() => setFilters(prev => ({ ...prev, gender: g }))}
+                                                    style={{
+                                                        paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+                                                        backgroundColor: filters.gender === g ? Colors.primary : Colors.secondaryLight,
+                                                    }}
+                                                >
+                                                    <Text style={{ color: filters.gender === g ? Colors.white : Colors.textSecondary, fontWeight: '600' }}>{g}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+
+                                    {/* Age Range */}
+                                    <View style={{ marginBottom: 16 }}>
+                                        <Text style={styles.gridLabel}>Age Range</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                            <TextInput
+                                                style={[styles.searchInput, { borderWidth: 1, borderColor: Colors.borderLight, borderRadius: 12, padding: 12, flex: 1, textAlign: 'center' }]}
+                                                placeholder="Min"
+                                                keyboardType="numeric"
+                                                value={filters.ageRange[0]?.toString() || ''}
+                                                onChangeText={(t) => setFilters(prev => ({ ...prev, ageRange: [parseInt(t) || 18, prev.ageRange[1]] }))}
+                                            />
+                                            <Text>-</Text>
+                                            <TextInput
+                                                style={[styles.searchInput, { borderWidth: 1, borderColor: Colors.borderLight, borderRadius: 12, padding: 12, flex: 1, textAlign: 'center' }]}
+                                                placeholder="Max"
+                                                keyboardType="numeric"
+                                                value={filters.ageRange[1]?.toString() || ''}
+                                                onChangeText={(t) => setFilters(prev => ({ ...prev, ageRange: [prev.ageRange[0], parseInt(t) || 60] }))}
+                                            />
+                                        </View>
+                                    </View>
+
+                                    {/* Location */}
+                                    <View style={{ marginBottom: 16 }}>
+                                        <Text style={styles.gridLabel}>Location (City/District)</Text>
+                                        <TextInput
+                                            style={[styles.searchInput, { borderWidth: 1, borderColor: Colors.borderLight, borderRadius: 12, padding: 12 }]}
+                                            placeholder="Enter city or district..."
+                                            value={filters.location || ''}
+                                            onChangeText={(t) => setFilters(prev => ({ ...prev, location: t }))}
+                                        />
+                                    </View>
+
+                                    {/* Marital Status */}
+                                    <View>
+                                        <Text style={styles.gridLabel}>Marital Status</Text>
+                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                                            {['Never Married', 'Divorced', 'Widowed', 'Separated'].map(status => {
+                                                const isSelected = filters.maritalStatus.includes(status);
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={status}
+                                                        onPress={() => {
+                                                            setFilters(prev => {
+                                                                const newStatus = isSelected
+                                                                    ? prev.maritalStatus.filter(s => s !== status)
+                                                                    : [...prev.maritalStatus, status];
+                                                                return { ...prev, maritalStatus: newStatus };
+                                                            });
+                                                        }}
+                                                        style={{
+                                                            paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+                                                            borderWidth: 1,
+                                                            borderColor: isSelected ? Colors.primary : Colors.borderLight,
+                                                            backgroundColor: isSelected ? Colors.secondaryLight : Colors.white
+                                                        }}
+                                                    >
+                                                        <Text style={{ color: isSelected ? Colors.primary : Colors.textSecondary, fontSize: 13 }}>{status}</Text>
+                                                    </TouchableOpacity>
+                                                );
+                                            })}
+                                        </View>
+                                    </View>
+                                </View>
+
+                                <View style={{ height: 1, backgroundColor: Colors.borderLight }} />
+
+                                {/* Section 2: Community */}
+                                <View>
+                                    <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.primary, marginBottom: 12, fontFamily: 'SpaceMono' }}>
+                                        Community
+                                    </Text>
+                                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.gridLabel}>Caste</Text>
+                                            <TextInput
+                                                style={[styles.searchInput, { borderWidth: 1, borderColor: Colors.borderLight, borderRadius: 12, padding: 12 }]}
+                                                placeholder="e.g. Mali"
+                                                value={filters.caste || ''}
+                                                onChangeText={(t) => setFilters(prev => ({ ...prev, caste: t }))}
+                                            />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.gridLabel}>Sub-caste</Text>
+                                            <TextInput
+                                                style={[styles.searchInput, { borderWidth: 1, borderColor: Colors.borderLight, borderRadius: 12, padding: 12 }]}
+                                                placeholder="e.g. Phul Mali"
+                                                value={filters.subCaste || ''}
+                                                onChangeText={(t) => setFilters(prev => ({ ...prev, subCaste: t }))}
+                                            />
+                                        </View>
+                                    </View>
+                                </View>
+
+                                <View style={{ height: 1, backgroundColor: Colors.borderLight }} />
+
+                                {/* Section 3: Education & Work */}
+                                <View>
+                                    <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.primary, marginBottom: 12, fontFamily: 'SpaceMono' }}>
+                                        Education & Work
+                                    </Text>
+                                    <View style={{ marginBottom: 16 }}>
+                                        <Text style={styles.gridLabel}>Education Level</Text>
+                                        <TextInput
+                                            style={[styles.searchInput, { borderWidth: 1, borderColor: Colors.borderLight, borderRadius: 12, padding: 12 }]}
+                                            placeholder="e.g. Graduate, BE, MBA..."
+                                            value={filters.education || ''}
+                                            onChangeText={(t) => setFilters(prev => ({ ...prev, education: t }))}
+                                        />
+                                    </View>
+                                    <View>
+                                        <Text style={styles.gridLabel}>Occupation</Text>
+                                        <TextInput
+                                            style={[styles.searchInput, { borderWidth: 1, borderColor: Colors.borderLight, borderRadius: 12, padding: 12 }]}
+                                            placeholder="e.g. Service, Business..."
+                                            value={filters.occupation || ''}
+                                            onChangeText={(t) => setFilters(prev => ({ ...prev, occupation: t }))}
+                                        />
+                                    </View>
+                                </View>
+
+                                <View style={{ height: 1, backgroundColor: Colors.borderLight }} />
+
+                                {/* Section 4: Lifestyle */}
+                                <View>
+                                    <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.primary, marginBottom: 12, fontFamily: 'SpaceMono' }}>
+                                        Lifestyle
+                                    </Text>
+                                    <View>
+                                        <Text style={styles.gridLabel}>Diet</Text>
+                                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                                            {['Any', 'Veg', 'Non-Veg'].map(d => (
+                                                <TouchableOpacity
+                                                    key={d}
+                                                    onPress={() => setFilters(prev => ({ ...prev, diet: d }))}
+                                                    style={{
+                                                        paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+                                                        backgroundColor: filters.diet === d ? Colors.primary : Colors.secondaryLight,
+                                                    }}
+                                                >
+                                                    <Text style={{ color: filters.diet === d ? Colors.white : Colors.textSecondary, fontWeight: '600' }}>{d}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    </View>
+                                </View>
+
+                                <View style={{ height: 1, backgroundColor: Colors.borderLight }} />
+
+                                {/* Section 5: Quick Filters */}
+                                <View>
+                                    <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.primary, marginBottom: 12, fontFamily: 'SpaceMono' }}>
+                                        Quick Filters
+                                    </Text>
+                                    <View style={{ gap: 16 }}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                <Camera size={20} color={Colors.textPrimary} />
+                                                <Text style={styles.gridLabel}>With Photo Only</Text>
+                                            </View>
+                                            <Switch
+                                                value={filters.withPhoto}
+                                                onValueChange={(v) => setFilters(prev => ({ ...prev, withPhoto: v }))}
+                                                trackColor={{ false: Colors.borderLight, true: Colors.primary }}
+                                            />
+                                        </View>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                                <Clock size={20} color={Colors.textPrimary} />
+                                                <Text style={styles.gridLabel}>Recently Active</Text>
+                                            </View>
+                                            <Switch
+                                                value={filters.activeRecently}
+                                                onValueChange={(v) => setFilters(prev => ({ ...prev, activeRecently: v }))}
+                                                trackColor={{ false: Colors.borderLight, true: Colors.primary }}
+                                            />
+                                        </View>
+                                    </View>
+                                </View>
+
+                            </View>
+                        </ScrollView>
+
+                        <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: Colors.borderLight }}>
+                            <TouchableOpacity
+                                style={styles.completionGoButton}
+                                onPress={() => setShowFilterModal(false)}
+                            >
+                                <Text style={styles.completionGoButtonText}>Apply Filters</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.completionLaterButton, { marginTop: 8 }]}
+                                onPress={() => {
+                                    setFilters(quickFilters); // Reset
+                                }}
+                            >
+                                <Text style={styles.completionLaterText}>Clear All</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
             {showCompletionModal && (
                 <Modal
                     animationType="fade"
                     transparent={true}
                     visible={showCompletionModal}
-                    onRequestClose={() => setShowCompletionModal(false)}
+                    // Prevent closing via hardware back button
+                    onRequestClose={() => { }}
                 >
                     <View style={styles.completionOverlay}>
                         <View style={styles.completionModalContent}>
@@ -1123,8 +1521,22 @@ const MatchesPage = () => {
                             </View>
                             <Text style={styles.completionTitle}>Complete Your Profile</Text>
                             <Text style={styles.completionSubtitle}>
-                                Please complete your profile to get matches relevant to you and unlock all features.
+                                To see matches, please complete the following fields:
                             </Text>
+
+                            {missingFields.length > 0 && (
+                                <View style={{ width: '100%', marginBottom: 20 }}>
+                                    {missingFields.map((field, index) => (
+                                        <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.danger, marginRight: 8 }} />
+                                            <Text style={{ fontSize: 14, color: Colors.textSecondary, fontFamily: 'SpaceMono', textTransform: 'capitalize' }}>
+                                                {field.replace(/([A-Z])/g, ' $1').trim()}
+                                            </Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+
                             <TouchableOpacity
                                 style={styles.completionGoButton}
                                 onPress={() => {
@@ -1134,12 +1546,7 @@ const MatchesPage = () => {
                             >
                                 <Text style={styles.completionGoButtonText}>Go to Profile</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity
-                                style={styles.completionLaterButton}
-                                onPress={() => setShowCompletionModal(false)}
-                            >
-                                <Text style={styles.completionLaterText}>Maybe Later</Text>
-                            </TouchableOpacity>
+                            {/* Removed "Maybe Later" to enforce completion */}
                         </View>
                     </View>
                 </Modal>

@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { View, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -81,22 +80,25 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.tabBarWrapper, { paddingBottom: insets.bottom }]}>
-        {/* Transparent Glass Effect */}
-        <BlurView
-          intensity={80}
-          tint="light"
-          style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.7)' }]}
-        />
-
-        {/* Subtle top border */}
-        <View style={[styles.topBorder, { backgroundColor: 'rgba(255,255,255,0.2)' }]} />
-
+      <View style={[
+        styles.tabBarWrapper,
+        {
+          paddingBottom: Math.max(insets.bottom, 12), // Ensure at least some padding
+          backgroundColor: Colors.white,
+          borderTopWidth: 1,
+          borderTopColor: Colors.borderLight,
+          elevation: 10, // Shadow for Android
+          shadowColor: '#000', // Shadow for iOS
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+        }
+      ]}>
         <View style={styles.tabBar}>
-          {/* Sliding Pill Background - slightly more transparent */}
+          {/* Sliding Pill Background */}
           <Animated.View style={[styles.pillContainer, pillStyle]} pointerEvents="none">
             <LinearGradient
-              colors={[`${Colors.primary}CC`, `${Colors.primaryLight}CC`]}
+              colors={[`${Colors.primary}20`, `${Colors.primaryLight}20`]} // Much lighter pill
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.pill}
@@ -114,7 +116,6 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                 route.name.includes('profile') ? 'user' : 'settings';
 
             const onPress = () => {
-              console.log('Tab pressed:', route.name, 'Is focused:', isFocused);
               const event = navigation.emit({
                 type: 'tabPress',
                 target: route.key,
@@ -122,9 +123,8 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
               });
 
               if (!isFocused && !event.defaultPrevented) {
-                console.log('Navigating to:', route.name);
                 navigation.navigate(route.name);
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               }
             };
 
@@ -166,16 +166,16 @@ const TabButton = ({ iconName, label, isFocused, onPress }) => {
       <View style={styles.iconContainer}>
         <TabBarIcon
           name={iconName}
-          color={isFocused ? Colors.white : Colors.textLight}
+          color={isFocused ? Colors.primary : Colors.textLight} // Active is Primary color now
           focused={isFocused}
-          size={isFocused ? 22 : 20}
+          size={isFocused ? 24 : 22}
         />
       </View>
 
       <Animated.Text
         style={[
           styles.label,
-          { color: isFocused ? Colors.white : Colors.textLight },
+          { color: isFocused ? Colors.primary : Colors.textLight }, // Active is Primary
           labelStyle
         ]}
         numberOfLines={1}
@@ -320,23 +320,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     paddingHorizontal: 8,
     position: 'relative',
-    paddingVertical: 4,
+    paddingVertical: 8, // Increased padding
   },
   tabButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: 4,
     zIndex: 2,
   },
   iconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 3,
+    marginBottom: 4,
   },
   label: {
-    fontSize: 10,
-    fontWeight: '500',
+    fontSize: 11, // Slightly larger
+    fontWeight: '600',
     letterSpacing: 0.2,
     fontFamily: 'SpaceMono',
     textAlign: 'center',
@@ -344,12 +344,12 @@ const styles = StyleSheet.create({
   pillContainer: {
     position: 'absolute',
     left: 8,
-    top: 4,
-    bottom: 4,
+    top: 6,
+    bottom: 6,
     zIndex: 1,
   },
   pill: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 16,
   },
 });
