@@ -361,7 +361,7 @@ export default function MyProfilePage() {
     'College/University': 'college',
     'Annual Income': 'income',
     "Father's Name": 'fatherName',
-    "Mother's Name": 'mother',
+    "Mother Name": 'mother',
     "Parent's Residence City": 'parentResidenceCity',
     "Number of Brothers": 'brothers',
     "Number of Sisters": 'sisters',
@@ -609,11 +609,11 @@ export default function MyProfilePage() {
       transformed.profilePhoto = formData.profilePhoto;
     }
 
-    if (formData['Relative Surnames']) {
-      if (Array.isArray(formData['Relative Surnames'])) {
-        transformed.relativeSurname = formData['Relative Surnames'].filter(s => s.trim() !== '');
-      } else if (typeof formData['Relative Surnames'] === 'string') {
-        transformed.relativeSurname = formData['Relative Surnames'].split(',').map(s => s.trim()).filter(s => s !== '');
+    if (formData['relativeSurname']) {
+      if (Array.isArray(formData['relativeSurname'])) {
+        transformed.relativeSurname = formData['relativeSurname'].filter(s => s.trim() !== '');
+      } else if (typeof formData['relativeSurname'] === 'string') {
+        transformed.relativeSurname = formData['relativeSurname'].split(',').map(s => s.trim()).filter(s => s !== '');
       }
     }
 

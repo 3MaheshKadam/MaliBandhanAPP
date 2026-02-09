@@ -31,7 +31,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
-const PlanCard = ({ plan, isCurrentPlan, isButtonLoading, config, onSubscribe }) => {
+const PlanCard = ({ plan, isCurrentPlan, isDowngrade, isButtonLoading, config, onSubscribe }) => {
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -64,6 +64,15 @@ const PlanCard = ({ plan, isCurrentPlan, isButtonLoading, config, onSubscribe })
   };
 
   const IconComponent = config.icon;
+
+  const getButtonText = () => {
+    if (isButtonLoading) return '';
+    if (isCurrentPlan) return '🎉 Currently Active';
+    if (isDowngrade) return 'Downgrade';
+    return 'Subscribe Now';
+  };
+
+  const isButtonDisabled = !plan.isActive || isButtonLoading || isCurrentPlan || isDowngrade;
 
   return (
     <Animated.View
@@ -157,20 +166,21 @@ const PlanCard = ({ plan, isCurrentPlan, isButtonLoading, config, onSubscribe })
           onPress={() => onSubscribe(plan)}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
-          disabled={!plan.isActive || isButtonLoading || isCurrentPlan}
+          disabled={isButtonDisabled}
           style={{
-            backgroundColor: isCurrentPlan ? Colors.success : config.bgColor,
+            backgroundColor: isCurrentPlan ? Colors.success : (isDowngrade ? Colors.border : config.bgColor),
             padding: 16,
             borderRadius: 12,
             alignItems: 'center',
-            opacity: !plan.isActive || isButtonLoading || isCurrentPlan ? 0.5 : 1,
+            opacity: isButtonDisabled ? 0.6 : 1,
+            marginTop: 12
           }}
         >
           {isButtonLoading ? (
             <ActivityIndicator color={config.textColor} />
           ) : (
-            <Text style={{ color: config.textColor, fontWeight: '700', fontSize: 18, fontFamily: 'SpaceMono' }}>
-              {isCurrentPlan ? '🎉 Currently Active' : 'Subscribe Now'}
+            <Text style={{ color: isDowngrade ? Colors.textSecondary : config.textColor, fontWeight: '700', fontSize: 18, fontFamily: 'SpaceMono' }}>
+              {getButtonText()}
             </Text>
           )}
         </TouchableOpacity>
@@ -469,16 +479,23 @@ export default function SettingsPage() {
             />
           )}
 
-          {plans.map((plan) => (
-            <PlanCard
-              key={plan._id}
-              plan={plan}
-              isCurrentPlan={currentSubscription?.subscriptionId === plan._id}
-              isButtonLoading={isSubscribing && activeButtonId === plan._id}
-              config={getPlanConfig(plan.name)}
-              onSubscribe={handleSubscription}
-            />
-          ))}
+          {plans.map((plan) => {
+            const activePlan = plans.find(p => p._id === currentSubscription?.subscriptionId) || (currentSubscription?.subscriptionId === freePlan?._id ? freePlan : null);
+            const isActive = currentSubscription?.subscriptionId === plan._id;
+            const isDowngrade = activePlan && Number(plan.price) < Number(activePlan.price);
+
+            return (
+              <PlanCard
+                key={plan._id}
+                plan={plan}
+                isCurrentPlan={isActive}
+                isDowngrade={isDowngrade}
+                isButtonLoading={isSubscribing && activeButtonId === plan._id}
+                config={getPlanConfig(plan.name)}
+                onSubscribe={handleSubscription}
+              />
+            );
+          })}
 
           <View
             style={{

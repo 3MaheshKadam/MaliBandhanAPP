@@ -1340,7 +1340,7 @@ const MatchesPage = () => {
                                     <View>
                                         <Text style={styles.gridLabel}>Marital Status</Text>
                                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                                            {['Never Married', 'Divorced', 'Widowed', 'Separated'].map(status => {
+                                            {['Unmarried', 'Divorced', 'Widowed', 'Separated'].map(status => {
                                                 const isSelected = filters.maritalStatus.includes(status);
                                                 return (
                                                     <TouchableOpacity
